@@ -99,3 +99,8 @@ export function reportInvalid(params) {
 export function getUserInfo(params) {
   return callCloudFunction('getUserInfo', params)
 }
+
+// 获取资源详情
+export function getResourceDetail(params) {
+  return callCloudFunction('getResourceDetail', params)
+}

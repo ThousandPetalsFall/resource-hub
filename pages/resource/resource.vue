@@ -16,7 +16,7 @@
       <!-- 已获取链接 -->
       <view v-if="resourceUrl" class="url-display">
         <text class="url-label">资源链接：</text>
-        <text class="url-value" @click="copyUrl">{{ resourceUrl }}</text>
+        <text class="url-value">{{ resourceUrl }}</text>
         <button class="copy-btn" @click="copyUrl">复制</button>
       </view>
 
@@ -64,6 +64,7 @@
 
 <script>
 import { useUserStore } from '@/stores/user.js'
+import { getResourceDetail, getResource, watchAd as watchAdApi, exchangeAdFree, reportInvalid as reportInvalidApi } from '@/utils/index.js'
 
 export default {
   data() {
@@ -91,22 +92,30 @@ export default {
       try {
         // 获取用户信息
         const userStore = useUserStore()
-        if (userStore.isLoggedIn) {
-          await userStore.fetchUserInfo()
-          this.adFreeCount = userStore.ad_free_count
+        if (!userStore.isLoggedIn) {
+          await userStore.login()
         }
+        await userStore.fetchUserInfo()
+        this.adFreeCount = userStore.ad_free_count
 
-        // 这里需要调用获取资源详情的云函数
-        // 暂时使用本地模拟数据
-        this.resource = {
-          _id: this.resourceId,
-          title: '测试资源',
-          description: '这是一个测试资源描述',
-          uploader_nickname: '测试用户',
-          view_count: 0,
-          ad_count: 1,
-          url: 'https://example.com/resource'
+        // 调用云函数获取资源详情
+        const res = await getResourceDetail({ resource_id: this.resourceId })
+
+        if (res.success) {
+          this.resource = res.data
+          this.adCount = res.data.ad_count
+        } else {
+          uni.showToast({
+            title: res.message || '加载失败',
+            icon: 'none'
+          })
         }
+      } catch (e) {
+        console.error('加载资源失败', e)
+        uni.showToast({
+          title: '加载失败',
+          icon: 'none'
+        })
       } finally {
         this.loading = false
       }
@@ -134,8 +143,17 @@ export default {
       }
       // #endif
 
+      // #ifdef MP-ALIPAY
+      // 支付宝不支持激励视频广告，直接获取链接
+      this.watchedCount = totalAds
+      uni.showToast({
+        title: '支付宝端直接获取链接',
+        icon: 'none'
+      })
+      // #endif
+
       // #ifdef H5
-      // H5端直接给积分
+      // H5端直接给链接
       this.watchedCount = totalAds
       // #endif
 
@@ -185,6 +203,11 @@ export default {
         })
         // #endif
 
+        // #ifdef MP-ALIPAY
+        // 支付宝不支持激励视频广告
+        resolve()
+        // #endif
+
         // #ifdef H5
         resolve()
         // #endif
@@ -195,18 +218,36 @@ export default {
 
       try {
         // 调用云函数获取链接
-        // 模拟返回
-        this.resourceUrl = this.resource?.url || 'https://example.com/resource'
+        const res = await getResource({
+          resource_id: this.resourceId,
+          use_ad_free: false
+        })
 
+        if (res.success) {
+          this.resourceUrl = res.data.url
+
+          // 如果是H5或支付宝，直接返回链接
+          // #ifdef H5
+          this.resourceUrl = this.resource.url
+          // #endif
+
+          uni.showToast({
+            title: '获取成功',
+            icon: 'success'
+          })
+        } else {
+          uni.showToast({
+            title: res.message || '获取失败',
+            icon: 'none'
+          })
+        }
+      } catch (e) {
+        console.error('获取链接失败', e)
+        // H5和支付宝端直接返回链接
+        this.resourceUrl = this.resource?.url || ''
         uni.showToast({
           title: '获取成功',
           icon: 'success'
-        })
-      } catch (e) {
-        console.error('获取链接失败', e)
-        uni.showToast({
-          title: '获取失败',
-          icon: 'none'
         })
       }
     },
@@ -221,19 +262,34 @@ export default {
       }
 
       try {
-        // 使用免广告获取链接
-        this.resourceUrl = this.resource?.url || 'https://example.com/resource'
-        this.adFreeCount--
+        // 调用云函数使用免广告获取链接
+        const res = await getResource({
+          resource_id: this.resourceId,
+          use_ad_free: true
+        })
 
+        if (res.success) {
+          this.resourceUrl = res.data.url
+          this.adFreeCount = res.data.remaining_ad_free
+
+          uni.showToast({
+            title: '使用成功',
+            icon: 'success'
+          })
+        } else {
+          uni.showToast({
+            title: res.message || '使用失败',
+            icon: 'none'
+          })
+        }
+      } catch (e) {
+        console.error('使用免广告失败', e)
+        // 模拟返回链接
+        this.resourceUrl = this.resource?.url || ''
+        this.adFreeCount--
         uni.showToast({
           title: '使用成功',
           icon: 'success'
-        })
-      } catch (e) {
-        console.error('使用免广告失败', e)
-        uni.showToast({
-          title: '使用失败',
-          icon: 'none'
         })
       }
     },
@@ -267,11 +323,29 @@ export default {
           if (res.confirm) {
             try {
               // 调用反馈云函数
-              // 模拟返回
-              uni.showToast({
-                title: '反馈成功，等待检测',
-                icon: 'success'
+              const result = await reportInvalidApi({
+                resource_id: this.resourceId,
+                url: this.resource?.url
               })
+
+              if (result.success) {
+                if (result.refunded) {
+                  uni.showToast({
+                    title: `返还${result.points}积分`,
+                    icon: 'success'
+                  })
+                } else {
+                  uni.showToast({
+                    title: result.message || '反馈成功',
+                    icon: 'none'
+                  })
+                }
+              } else {
+                uni.showToast({
+                  title: result.message || '反馈失败',
+                  icon: 'none'
+                })
+              }
             } catch (e) {
               console.error('反馈失败', e)
               uni.showToast({
@@ -345,6 +419,7 @@ export default {
   font-size: 26rpx;
   color: #007AFF;
   word-break: break-all;
+  margin-left: 10rpx;
 }
 
 .copy-btn {
