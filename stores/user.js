@@ -71,28 +71,34 @@ export const useUserStore = defineStore('user', {
         // #endif
 
         // #ifdef MP-ALIPAY
-        // 支付宝小程序登录
-        const authRes = await new Promise((resolve, reject) => {
-          my.getAuthCode({
-            scopes: 'auth_base',
-            success: resolve,
-            fail: reject
-          })
-        })
-
+        // 支付宝小程序登录 - 云函数自动获取openid，不需要code
         const result = await my.cloud.callFunction({
           name: 'login',
-          data: { code: auth        })
+          data: {}
+        })
 
         if (result.success) {
-          const userData = result.dataRes.authCode }
-
+          const userData = result.data
           this.openid = userData.openid
           this.points = userData.points || 0
           this.ad_free_count = userData.ad_free_count || 0
+          this.total_ads_watched = userData.total_ads_watched || 0
+          this.total_resources_uploaded = userData.total_resources_uploaded || 0
           this.isLoggedIn = true
+
+          // 保存到本地存储
+          uni.setStorageSync('userInfo', {
+            openid: this.openid,
+            points: this.points,
+            ad_free_count: this.ad_free_count,
+            total_ads_watched: this.total_ads_watched,
+            total_resources_uploaded: this.total_resources_uploaded
+          })
+
+          return { success: true }
+        } else {
+          return { success: false, message: result.message || '登录失败' }
         }
-        return result
         // #endif
       } catch (e) {
         console.error('登录失败', e)
@@ -127,6 +133,20 @@ export const useUserStore = defineStore('user', {
 
         if (result.result && result.result.success) {
           const userData = result.result.data
+          this.points = userData.points || 0
+          this.ad_free_count = userData.ad_free_count || 0
+          this.nickname = userData.nickname || ''
+        }
+        // #endif
+
+        // #ifdef MP-ALIPAY
+        const result = await my.cloud.callFunction({
+          name: 'getUserInfo',
+          data: { openid: this.openid }
+        })
+
+        if (result.success) {
+          const userData = result.data
           this.points = userData.points || 0
           this.ad_free_count = userData.ad_free_count || 0
           this.nickname = userData.nickname || ''
@@ -180,7 +200,20 @@ export const useUserStore = defineStore('user', {
           name: 'watchAd',
           data: { adId }
         })
-        return result
+
+        if (result.success) {
+          this.points = result.data.totalPoints
+          uni.setStorageSync('userInfo', {
+            openid: this.openid,
+            points: this.points,
+            ad_free_count: this.ad_free_count,
+            total_ads_watched: this.total_ads_watched,
+            total_resources_uploaded: this.total_resources_uploaded
+          })
+          return result
+        } else {
+          return result || { success: false, message: '看广告失败' }
+        }
         // #endif
       } catch (e) {
         console.error('看广告失败', e)
@@ -226,7 +259,14 @@ export const useUserStore = defineStore('user', {
           name: 'exchangeAdFree',
           data: { count }
         })
-        return result
+
+        if (result.success) {
+          this.points = result.data.remaining_points
+          this.ad_free_count = result.data.ad_free_count
+          return result
+        } else {
+          return result || { success: false, message: '兑换失败' }
+        }
         // #endif
       } catch (e) {
         console.error('兑换失败', e)

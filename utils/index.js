@@ -1,13 +1,10 @@
 // 工具函数 - 云函数调用封装
-import { useUserStore } from '@/stores/user.js'
-
 // 环境ID - 需要在 manifest.json 中配置
 const CLOUD_ENV = 'env-00jy61kgq0gk'
 
-// 调用云函数
-function callCloudFunction(name, data = {}) {
+// 调用云函数 - 微信版本
+function callCloudFunctionWechat(name, data = {}) {
   return new Promise((resolve, reject) => {
-    // #ifdef MP-WEIXIN
     wx.cloud.init({
       env: CLOUD_ENV
     })
@@ -23,15 +20,12 @@ function callCloudFunction(name, data = {}) {
         reject(err)
       }
     })
-    // #endif
+  })
+}
 
-    // #ifdef H5
-    // H5端模拟
-    console.log(`[H5模拟] 调用云函数 ${name}`, data)
-    resolve({ success: false, message: 'H5端暂不支持云函数' })
-    // #endif
-
-    // #ifdef MP-ALIPAY
+// 调用云函数 - 支付宝版本
+function callCloudFunctionAlipay(name, data = {}) {
+  return new Promise((resolve, reject) => {
     my.cloud.init({
       env: CLOUD_ENV
     })
@@ -40,15 +34,30 @@ function callCloudFunction(name, data = {}) {
       name,
       data,
       success: (res) => {
-        resolve(res.result || {})
+        // 支付宝返回结果直接在 res.result，如果失败则是 { success: false }
+        resolve(res.result || res)
       },
       fail: (err) => {
         console.error(`云函数 ${name} 调用失败`, err)
         reject(err)
       }
     })
-    // #endif
   })
+}
+
+// 统一调用云函数
+function callCloudFunction(name, data = {}) {
+  // #ifdef MP-WEIXIN
+  return callCloudFunctionWechat(name, data)
+  // #endif
+
+  // #ifdef MP-ALIPAY
+  return callCloudFunctionAlipay(name, data)
+  // #endif
+
+  // #ifdef H5
+  return Promise.resolve({ success: false, message: 'H5端暂不支持云函数' })
+  // #endif
 }
 
 // 登录
@@ -84,4 +93,9 @@ export function exchangeAdFree(params) {
 // 反馈失效链接
 export function reportInvalid(params) {
   return callCloudFunction('reportInvalid', params)
+}
+
+// 获取用户信息
+export function getUserInfo(params) {
+  return callCloudFunction('getUserInfo', params)
 }
