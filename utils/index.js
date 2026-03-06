@@ -1,9 +1,9 @@
-// 工具函数 - 云函数调用封装
-// 环境ID - 需要在 manifest.json 中配置
+// 工具函数 - 云函数调用封装（微信小程序 + 支付宝云）
+// 环境ID
 const CLOUD_ENV = 'env-00jy61kgq0gk'
 
-// 调用云函数 - 微信版本
-function callCloudFunctionWechat(name, data = {}) {
+// 调用云函数
+function callCloudFunction(name, data = {}) {
   return new Promise((resolve, reject) => {
     wx.cloud.init({
       env: CLOUD_ENV
@@ -21,43 +21,6 @@ function callCloudFunctionWechat(name, data = {}) {
       }
     })
   })
-}
-
-// 调用云函数 - 支付宝版本
-function callCloudFunctionAlipay(name, data = {}) {
-  return new Promise((resolve, reject) => {
-    my.cloud.init({
-      env: CLOUD_ENV
-    })
-
-    my.cloud.callFunction({
-      name,
-      data,
-      success: (res) => {
-        // 支付宝返回结果直接在 res.result，如果失败则是 { success: false }
-        resolve(res.result || res)
-      },
-      fail: (err) => {
-        console.error(`云函数 ${name} 调用失败`, err)
-        reject(err)
-      }
-    })
-  })
-}
-
-// 统一调用云函数
-function callCloudFunction(name, data = {}) {
-  // #ifdef MP-WEIXIN
-  return callCloudFunctionWechat(name, data)
-  // #endif
-
-  // #ifdef MP-ALIPAY
-  return callCloudFunctionAlipay(name, data)
-  // #endif
-
-  // #ifdef H5
-  return Promise.resolve({ success: false, message: 'H5端暂不支持云函数' })
-  // #endif
 }
 
 // 登录

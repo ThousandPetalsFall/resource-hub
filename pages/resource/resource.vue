@@ -136,26 +136,11 @@ export default {
       this.watchingAd = true
       this.watchedCount = 0
 
-      // #ifdef MP-WEIXIN
+      // 观看广告
       for (let i = 0; i < totalAds; i++) {
         await this.showAd()
         this.watchedCount++
       }
-      // #endif
-
-      // #ifdef MP-ALIPAY
-      // 支付宝不支持激励视频广告，直接获取链接
-      this.watchedCount = totalAds
-      uni.showToast({
-        title: '支付宝端直接获取链接',
-        icon: 'none'
-      })
-      // #endif
-
-      // #ifdef H5
-      // H5端直接给链接
-      this.watchedCount = totalAds
-      // #endif
 
       // 看完所有广告后，获取链接
       await this.getResourceLink()
@@ -163,7 +148,6 @@ export default {
     },
     showAd() {
       return new Promise((resolve) => {
-        // #ifdef MP-WEIXIN
         if (!this.adUnitId) {
           uni.showToast({
             title: '请先配置广告ID',
@@ -201,21 +185,9 @@ export default {
         ad.show().catch(() => {
           ad.load().then(() => ad.show())
         })
-        // #endif
-
-        // #ifdef MP-ALIPAY
-        // 支付宝不支持激励视频广告
-        resolve()
-        // #endif
-
-        // #ifdef H5
-        resolve()
-        // #endif
       })
     },
     async getResourceLink() {
-      const userStore = useUserStore()
-
       try {
         // 调用云函数获取链接
         const res = await getResource({
@@ -225,12 +197,6 @@ export default {
 
         if (res.success) {
           this.resourceUrl = res.data.url
-
-          // 如果是H5或支付宝，直接返回链接
-          // #ifdef H5
-          this.resourceUrl = this.resource.url
-          // #endif
-
           uni.showToast({
             title: '获取成功',
             icon: 'success'
@@ -243,11 +209,9 @@ export default {
         }
       } catch (e) {
         console.error('获取链接失败', e)
-        // H5和支付宝端直接返回链接
-        this.resourceUrl = this.resource?.url || ''
         uni.showToast({
-          title: '获取成功',
-          icon: 'success'
+          title: '获取失败',
+          icon: 'none'
         })
       }
     },
@@ -271,7 +235,6 @@ export default {
         if (res.success) {
           this.resourceUrl = res.data.url
           this.adFreeCount = res.data.remaining_ad_free
-
           uni.showToast({
             title: '使用成功',
             icon: 'success'
@@ -284,12 +247,9 @@ export default {
         }
       } catch (e) {
         console.error('使用免广告失败', e)
-        // 模拟返回链接
-        this.resourceUrl = this.resource?.url || ''
-        this.adFreeCount--
         uni.showToast({
-          title: '使用成功',
-          icon: 'success'
+          title: '使用失败',
+          icon: 'none'
         })
       }
     },
