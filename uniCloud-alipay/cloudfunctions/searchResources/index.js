@@ -20,8 +20,8 @@ exports.main = async (event, context) => {
       }
     }
 
-    // 只显示有效的资源
-    query.is_valid = _.neq('false')
+    // 只显示有效的资源（is_valid 为 null 或不为 'false'）
+    query.is_valid = _.or(_.eq(null), _.neq('false'))
 
     const res = await db.collection('resources')
       .where(query)
@@ -30,13 +30,26 @@ exports.main = async (event, context) => {
       .limit(pageSize)
       .get()
 
+    // 过滤掉 URL 等敏感信息
+    const list = (res.data || []).map(item => ({
+      _id: item._id,
+      title: item.title,
+      description: item.description,
+      ad_count: item.ad_count || 1,
+      uploader_nickname: item.uploader_nickname,
+      view_count: item.view_count || 0,
+      feedback_count: item.feedback_count || 0,
+      is_valid: item.is_valid,
+      create_time: item.create_time
+    }))
+
     return {
       success: true,
       data: {
-        list: res.data || [],
+        list,
         page,
         pageSize,
-        total: res.data ? res.data.length : 0
+        total: list.length
       }
     }
   } catch (error) {

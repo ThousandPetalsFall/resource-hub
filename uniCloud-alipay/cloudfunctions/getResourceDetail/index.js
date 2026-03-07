@@ -24,13 +24,14 @@ exports.main = async (event, context) => {
 
     const resource = resourceRes.data[0]
 
+    // 注意：不在详情中返回URL，防止用户不看广告就获取链接
+    // 用户必须通过 getResource 云函数看广告后才能获取链接
     return {
       success: true,
       data: {
         _id: resource._id,
         title: resource.title,
         description: resource.description || '',
-        url: resource.url,
         ad_count: resource.ad_count || 1,
         uploader_openid: resource.uploader_openid,
         uploader_nickname: resource.uploader_nickname || '匿名用户',
