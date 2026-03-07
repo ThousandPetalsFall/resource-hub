@@ -64,7 +64,7 @@
 
 <script>
 import { useUserStore } from '@/stores/user.js'
-import { getResourceDetail, getResource, watchAd as watchAdApi, exchangeAdFree, reportInvalid as reportInvalidApi } from '@/utils/index.js'
+import { getResourceDetail, getResource, watchAd as watchAdApi, exchangeAdFree, reportInvalid as reportInvalidApi, getUserInfo } from '@/utils/index.js'
 
 export default {
   data() {
@@ -138,8 +138,27 @@ export default {
 
       // 观看广告
       for (let i = 0; i < totalAds; i++) {
-        await this.showAd()
-        this.watchedCount++
+        const adCompleted = await this.showAd()
+        if (adCompleted) {
+          this.watchedCount++
+          // 调用云函数获取积分
+          try {
+            const res = await watchAdApi({
+              adId: this.resourceId + '_' + i,
+              resource_id: this.resourceId
+            })
+            if (res.success) {
+              uni.showToast({
+                title: `获得 ${res.data.points} 积分`,
+                icon: 'none'
+              })
+              // 更新用户积分
+              await userStore.fetchUserInfo()
+            }
+          } catch (e) {
+            console.error('获取积分失败', e)
+          }
+        }
       }
 
       // 看完所有广告后，获取链接
@@ -149,11 +168,8 @@ export default {
     showAd() {
       return new Promise((resolve) => {
         if (!this.adUnitId) {
-          uni.showToast({
-            title: '请先配置广告ID',
-            icon: 'none'
-          })
-          resolve()
+          // 没有广告ID时，模拟广告完成（用于测试）
+          resolve(true)
           return
         }
 
@@ -163,12 +179,13 @@ export default {
 
         ad.onClose((res) => {
           if (res && res.isEnded) {
-            resolve()
+            resolve(true)
           } else {
             uni.showToast({
               title: '请完整观看广告',
               icon: 'none'
             })
+            resolve(false)
           }
           ad.destroy()
         })
@@ -179,7 +196,7 @@ export default {
             title: '广告加载失败',
             icon: 'none'
           })
-          resolve()
+          resolve(false)
         })
 
         ad.show().catch(() => {

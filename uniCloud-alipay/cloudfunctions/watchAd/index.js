@@ -13,6 +13,7 @@ exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
   const adId = event.adId // 广告ID，用于防刷
+  const resourceId = event.resource_id // 资源ID，记录看广告对应的资源
 
   if (!openid) {
     return { success: false, message: '用户未登录' }
@@ -69,15 +70,16 @@ exports.main = async (event, context) => {
         update_time: Date.now()
       })
 
-      // 记录广告观看日志
+      // 记录广告观看日志（包含资源ID用于追踪）
       await db.collection('ad_logs').add({
         data: {
           user_openid: openid,
           ad_id: adId || '',
+          resource_id: resourceId || '',
           type: 'earn',
           points: points,
           ad_free_count: 0,
-          reason: `看广告获得${points / 10}积分`,
+          reason: `看广告获得${points}积分`,
           create_time: Date.now()
         }
       })
@@ -92,7 +94,7 @@ exports.main = async (event, context) => {
           todayCount: todayCount + 1,
           totalPoints: updatedUser.data[0].points
         },
-        message: `获得 ${points / 10} 积分`
+        message: `获得 ${points} 积分`
       }
     } else {
       return { success: false, message: '用户不存在' }

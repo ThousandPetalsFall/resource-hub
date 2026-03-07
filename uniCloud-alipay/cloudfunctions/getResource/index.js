@@ -93,17 +93,44 @@ exports.main = async (event, context) => {
       }
     }
 
-    // 返回需要看广告的数量
+    // 检查用户已观看该资源的广告次数
+    const watchedAdsRes = await db.collection('ad_logs').where({
+      user_openid: openid,
+      type: 'earn',
+      resource_id: resource_id
+    }).get()
+
+    const watchedCount = watchedAdsRes.data ? watchedAdsRes.data.length : 0
+    const remainingAds = adCount - watchedCount
+
+    // 如果已看完所有广告，返回链接
+    if (watchedCount >= adCount) {
+      return {
+        success: true,
+        data: {
+          url: resource.url,
+          ad_count: adCount,
+          used_ad_free: false,
+          watched_count: watchedCount,
+          already_watched: true
+        },
+        message: '获取成功'
+      }
+    }
+
+    // 返回需要继续看广告的数量
     return {
       success: true,
       data: {
-        url: null, // 不直接返回链接，需要看广告
+        url: null,
         ad_count: adCount,
+        watched_count: watchedCount,
+        remaining_ads: remainingAds,
         used_ad_free: false,
         points: user.points,
         ad_free_count: user.ad_free_count
       },
-      message: `需要观看${adCount}个广告`
+      message: `还需观看${remainingAds}个广告，已观看${watchedCount}个`
     }
   } catch (error) {
     console.error('获取资源失败', error)
